@@ -62,6 +62,20 @@ app.delete("/delete-mahasiswa/:id", async function (req, res) {
   });
 });
 
+
+app.put("/update-mahasiswa/:id", async function (req, res) {
+    const dataMahasiswa = await MahasiswaModel.findByIdAndUpdate(req.params.id, {
+        nama: req.body.nama,
+        jurusan: req.body.jurusan,
+    });
+    res.send({
+        status: true,
+        message: "Data berhasil diupdate",
+        data: dataMahasiswa,
+    });
+});
+
+
 app.listen(5000, () => {
   console.log("Server is running on port 5000");
 });
