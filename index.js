@@ -11,7 +11,7 @@ app.use(express.json());
 
 // Route to create data
 
-app.post('/create-mahasiswa', async function (req,res) {
+app.post("/create-mahasiswa", async function (req,res) {
     console.log(req.body)
     const NewMahasiswa = new MahasiswaModel({
         nama: req.body.nama,
@@ -25,6 +25,15 @@ app.post('/create-mahasiswa', async function (req,res) {
     })
 })
 
+
+app.get("/get-mahasiswa", async function (req,res) {
+    const data = await MahasiswaModel.find();
+    res.send({
+        status: true,
+        message: 'Data berhasil didapatkan',
+        data:data
+    })
+})
 
 app.listen(5000, () => {
     console.log('Server is running on port 5000');
