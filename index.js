@@ -12,8 +12,8 @@ mongoose.connect(process.env.DB_Connect, {
 });
 app.use(express.json());
 
-// Route to create data
 
+//  Menambahkan data
 app.post("/create-mahasiswa", async function (req, res) {
   console.log(req.body);
 
@@ -30,7 +30,7 @@ app.post("/create-mahasiswa", async function (req, res) {
   });
 });
 
-// data search by id
+// Cari data berdasarkan id
 app.get("/cari-mahasiswa", async function (req, res) {
   const { nama } = req.query;
 
@@ -53,6 +53,7 @@ app.get("/cari-mahasiswa", async function (req, res) {
   }
 });
 
+// Delete data
 app.delete("/delete-mahasiswa/:id", async function (req, res) {
   const data = await MahasiswaModel.findByIdAndDelete(req.params.id);
   res.send({
@@ -62,7 +63,7 @@ app.delete("/delete-mahasiswa/:id", async function (req, res) {
   });
 });
 
-
+//  Update data 
 app.put("/update-mahasiswa/:id", async function (req, res) {
     const dataMahasiswa = await MahasiswaModel.findByIdAndUpdate(req.params.id, {
         nama: req.body.nama,
