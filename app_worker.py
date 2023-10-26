@@ -11,7 +11,7 @@ import pytz
 from datetime import datetime
 import json
 import uuid
-# import hashlib
+import hashlib
 
 FTP_HOST = 'ftp5.pptik.id'
 FTP_PORT = 2121
@@ -125,12 +125,12 @@ def process_image(file_name, encoder):
     local_file_path = os.path.join('downloads/', file_name)
     
     # create unique filename
-    # resi = hashlib.md5(file_name.encode()).hexdigest() + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
-    # file_name = resi + '.' + file_name.rsplit('.', 1)[1]
+    resi = hashlib.md5(file_name.encode()).hexdigest() + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+    file_name = resi + '.' + file_name.rsplit('.', 1)[1]
     
-    unique_id = str(uuid.uuid4())
-    file_extension = file_name.rsplit('.', 1)[1]
-    file_name = f"{unique_id}.{file_extension}"
+    # unique_id = str(uuid.uuid4())
+    # file_extension = file_name.rsplit('.', 1)[1]
+    # file_name = f"{unique_id}.{file_extension}"
     status = 'processing'
     
 

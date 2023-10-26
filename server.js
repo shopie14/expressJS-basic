@@ -3,6 +3,7 @@ const multer = require("multer");
 const uuid = require("uuid");
 const amqp = require("amqplib");
 const fs = require("fs");
+const crypto = require("crypto");
 const ftp = require("basic-ftp");
 const MongoClient = require("mongodb").MongoClient;
 
@@ -71,7 +72,6 @@ async function uploadToFTP(filename) {
       user: FTP_USERNAME,
       password: FTP_PASSWORD,
     });
-    await client.cd(FTP_UPLOAD_DIR);
     console.log(`Uploading ${filename} to FTP server.`);
     await client.uploadFrom(filename, filename);
     console.log(`Upload ${filename} complete.`);
@@ -89,40 +89,45 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 app.post("/upload", upload.single("file"), async (req, res) => {
-  try {
-    const iamge_file = req.file;
-    if (iamge_file) {
-      const file_uuid = uuid.v4();
-
-      const new_filename = `${file_uuid}.jpg`;
-
-      const receipt = new_filename;
-
-      const temp_path = `uploads/${new_filename}`;
-
-      fs.writeFileSync(temp_path, iamge_file.buffer);
-
-      await uploadToFTP(temp_path);
-      await sendToQueue(new_filename, receipt);
-
-      await mongo_collection.insertOne({
-        receipt: receipt,
-        status: "uploaded",
-      });
-
-      res.json({
-        receipt: receipt,
-        status: "file uploaded successfully",
-      });
-    } else {
-      const error_message = "No image uploaded.";
+    try {
+      const image_file = req.file;
+      if (image_file) {
+        const fileData = image_file.buffer;
+        const sha256sum = crypto.createHash("sha256");
+        sha256sum.update(fileData);
+        const file_uuid = sha256sum.digest("hex");
+        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
+        const file_extension = image_file.originalname.split('.').pop();
+        const new_filename = `${file_uuid}_${timestamp}.${file_extension}`;
+  
+        const receipt = new_filename;
+  
+        const temp_path = `uploads/${new_filename}`;
+  
+        fs.writeFileSync(temp_path, image_file.buffer);
+  
+        await uploadToFTP(new_filename);
+        await sendToQueue(new_filename, receipt);
+  
+        await mongo_collection.insertOne({
+          receipt: receipt,
+          status: "uploaded",
+        });
+  
+        res.json({
+          receipt: receipt,
+          status: "file uploaded successfully",
+        });
+      } else {
+        const error_message = "No image uploaded.";
+        res.json({ error: error_message });
+      }
+    } catch (error) {
+      const error_message = error.message || "An error occurred.";
       res.json({ error: error_message });
     }
-  } catch (error) {
-    const error_message = error.message || "An error occurred.";
-    res.json({ error: error_message });
-  }
-});
+  });
+  
 
 app.get("/check/:filename", async (req, res) => {
   try {
