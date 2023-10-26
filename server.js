@@ -1,39 +1,35 @@
-const express = require("express");
-const multer = require("multer");
-const uuid = require("uuid");
-const amqp = require("amqplib");
-const fs = require("fs");
-const crypto = require("crypto");
-const ftp = require("basic-ftp");
-const MongoClient = require("mongodb").MongoClient;
+//server.js
+const express = require('express');
+const multer = require('multer');
+const uuid = require('uuid');
+const amqp = require('amqplib');
+const fs = require('fs');
+const ftp = require('basic-ftp');
+const MongoClient = require('mongodb').MongoClient;
 
 const app = express();
 const port = 3000;
 
 // RabbitMQ configurations
-const RABBITMQ_HOST = "localhost";
-const RABBITMQ_QUEUE = "face_lskk";
+const RABBITMQ_HOST = 'localhost';
+const RABBITMQ_QUEUE = 'face_lskk';
 
 // FTP configurations
-const FTP_SERVER = "ftp5.pptik.id";
+const FTP_SERVER = 'ftp5.pptik.id';
 const FTP_PORT = 2121;
-const FTP_USERNAME = "magangitg";
-const FTP_PASSWORD = "bWFnYW5naXRn";
-const FTP_UPLOAD_DIR = "./face_reports/report_lskk/";
+const FTP_USERNAME = 'magangitg';
+const FTP_PASSWORD = 'bWFnYW5naXRn';
+const FTP_UPLOAD_DIR = './face_reports/report_lskk/';
 
 // MongoDB configurations
-const mongo_url =
-  "mongodb://magangitg:bWFnYW5naXRn@database2.pptik.id:27017/magangitg";
-const mongo_db = "magangitg";
-const mongo_collection_name = "face_lskk";
+const mongo_url = 'mongodb://magangitg:bWFnYW5naXRn@database2.pptik.id:27017/magangitg';
+const mongo_db = 'magangitg';
+const mongo_collection_name = 'face_lskk';
 
 let mongo_collection;
 
 async function createMongoConnection() {
-  const client = await MongoClient.connect(mongo_url, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  const client = await MongoClient.connect(mongo_url, { useNewUrlParser: true, useUnifiedTopology: true });
   const db = client.db(mongo_db);
   mongo_collection = db.collection(mongo_collection_name);
 }
@@ -42,29 +38,30 @@ createMongoConnection();
 
 // RabbitMQ connection setup
 async function sendToQueue(filename, receipt) {
-  const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}`);
-  const channel = await connection.createChannel();
-
-  try {
-    await channel.assertQueue(RABBITMQ_QUEUE, { durable: false });
-  } catch (error) {
-    if (error.code !== 406) {
-      throw error;
+    const connection = await amqp.connect(`amqp://${RABBITMQ_HOST}`);
+    const channel = await connection.createChannel();
+  
+    try {
+      // Try to assert the queue with the same parameters as the producer
+      await channel.assertQueue(RABBITMQ_QUEUE, { durable: false });
+    } catch (error) {
+      // If the queue has already been declared with different settings, catch the error
+      if (error.code !== 406) {
+        throw error; // Re-throw other errors
+      }
     }
-  }
+  
+    channel.sendToQueue(RABBITMQ_QUEUE, Buffer.from(filename), {
+      appId: receipt,
+    });
+  
+    await channel.close();
+    await connection.close();
+  }  
 
-  channel.sendToQueue(RABBITMQ_QUEUE, Buffer.from(filename), {
-    appId: receipt,
-  });
-
-  await channel.close();
-  await connection.close();
-}
-
-// FTP connection setup
-async function uploadToFTP(filename) {
+// FTP upload setup
+async function uploadToFTP(file_path, filename) {
   const client = new ftp.Client();
-  client.ftp.verbose = true;
   try {
     await client.access({
       host: FTP_SERVER,
@@ -72,81 +69,77 @@ async function uploadToFTP(filename) {
       user: FTP_USERNAME,
       password: FTP_PASSWORD,
     });
+
     console.log(`Uploading ${filename} to FTP server.`);
-    await client.uploadFrom(filename, filename);
-    console.log(`Upload ${filename} complete.`);
+    await client.uploadFrom(fs.createReadStream(file_path), `${FTP_UPLOAD_DIR}/${filename}`);
+    console.log(`Upload completed for ${filename}.`);
   } catch (error) {
-    console.log(error);
+    console.error(`FTP upload failed: ${error.message}`);
+  } finally {
+    client.close();
   }
-  client.close();
 }
 
+// Express setup
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: false }));
 
-// Multer setup
+// Multer setup for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+app.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    const image_file = req.file;
+    if (image_file) {
+      const file_uuid = uuid.v4();
+    //   const file_extension = image_file.originalname.toLowerCase();
+      const new_filename = `${file_uuid}.png`;
+
+      const receipt = new_filename;
+
+      const temp_path = `uploads/${new_filename}`;
+      fs.writeFileSync(temp_path, image_file.buffer);
+
+      await uploadToFTP(temp_path, new_filename);
+      await sendToQueue(temp_path, receipt);
+
+      await mongo_collection.insertOne({ receipt: receipt, status: 'uploaded' });
+
+      res.json({
+        receipt: receipt,
+        message: 'File uploaded successfully.',
+      });
+    } else {
+      const error_message = 'No image uploaded.';
+      res.json({ error: error_message });
+    }
+  } catch (error) {
+    const error_message = error.message || 'An error occurred.';
+    res.json({ error: error_message });
+  }
+});
+
+// Add the following code in the server.js file, after the existing /check_status endpoint
+
+app.get('/check/:filename', async (req, res) => {
     try {
-      const image_file = req.file;
-      if (image_file) {
-        const fileData = image_file.buffer;
-        const sha256sum = crypto.createHash("sha256");
-        sha256sum.update(fileData);
-        const file_uuid = sha256sum.digest("hex");
-        const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
-        const file_extension = image_file.originalname.split('.').pop();
-        const new_filename = `${file_uuid}_${timestamp}.${file_extension}`;
+      const filename = req.params.filename;
+      const result = await mongo_collection.findOne({ nama_file: filename });
   
-        const receipt = new_filename;
-  
-        const temp_path = `uploads/${new_filename}`;
-  
-        fs.writeFileSync(temp_path, image_file.buffer);
-  
-        await uploadToFTP(new_filename);
-        await sendToQueue(new_filename, receipt);
-  
-        await mongo_collection.insertOne({
-          receipt: receipt,
-          status: "uploaded",
-        });
-  
-        res.json({
-          receipt: receipt,
-          status: "file uploaded successfully",
-        });
+      if (result) {
+        const receipt = result.receipt || 'unknown';
+        const status = result.status || 'unknown';
+        res.json({ receipt, status, filename });
       } else {
-        const error_message = "No image uploaded.";
-        res.json({ error: error_message });
+        res.json({ error: 'File not found in the database.' });
       }
     } catch (error) {
-      const error_message = error.message || "An error occurred.";
-      res.json({ error: error_message });
+      res.json({ error: `An error occurred: ${error.message || 'unknown'}` });
     }
   });
   
 
-app.get("/check/:filename", async (req, res) => {
-  try {
-    const filename = req.params.filename;
-    const result = await mongo_collection.findOne({ receipt: filename });
-
-    if (result) {
-      const receipt = result.receipt || "unknown";
-      const status = result.status || "unknown";
-
-      res.json({ receipt, status, filename });
-    } else {
-      req.json({ error: "File not found in the database." });
-    }
-  } catch (error) {
-    req.json({ error: `An error occurred: ${error.message || "unknown"}` });
-  }
-});
-
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`Server is running at http://localhost:${port}`);
 });

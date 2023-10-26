@@ -64,12 +64,12 @@ def download_file_from_ftp(file_name):
 
 
 # fungsi untuk menyimpan hasil ke MongoDB
-def save_result_to_mongodb(resi, file_name, result, status):
+def save_result_to_mongodb(file_name, result, status):
     client = pymongo.MongoClient('mongodb://magangitg:bWFnYW5naXRn@database2.pptik.id:27017/?authMechanism=DEFAULT&authSource=magangitg')
     db = client['magangitg']
     collection = db['face_lskk']
 
-    post = {"resi": resi, "filename": file_name, "result": result, "status": status}
+    post = {"filename": file_name, "result": result, "status": status}
     post_id = collection.insert_one(post).inserted_id
     print('Successfully inserted document with post_id: {}'.format(post_id))
  
@@ -125,8 +125,8 @@ def process_image(file_name, encoder):
     local_file_path = os.path.join('downloads/', file_name)
     
     # create unique filename
-    resi = hashlib.md5(file_name.encode()).hexdigest() + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
-    file_name = resi + '.' + file_name.rsplit('.', 1)[1]
+    # resi = hashlib.md5(file_name.encode()).hexdigest() + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+    # file_name = resi + '.' + file_name.rsplit('.', 1)[1]
     
     # unique_id = str(uuid.uuid4())
     # file_extension = file_name.rsplit('.', 1)[1]
@@ -148,7 +148,7 @@ def process_image(file_name, encoder):
     status = "success processing" if result.get("name", "") != "unknown" else "failed processing"
     
     # Save the result to MongoDB
-    save_result_to_mongodb(resi, file_name, result, status)
+    save_result_to_mongodb(file_name, result, status)
     print(f'File processed: {file_name}, result: {outpus_json}, status: {status}')
 
 
