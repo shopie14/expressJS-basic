@@ -32,10 +32,10 @@ app.post("/create-mahasiswa", async function (req, res) {
 
 // Cari data berdasarkan id
 app.get("/cari-mahasiswa", async function (req, res) {
-  const { nama } = req.query;
+  const { mahasiswa } = req.query;
 
   const dataMahasiswa = await MahasiswaModel.find({
-    nama: nama,
+    nama: mahasiswa,
   });
 
   if (dataMahasiswa.length === 0) {
