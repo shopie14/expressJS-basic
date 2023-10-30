@@ -35,6 +35,10 @@ app.get("/signup", (req, res) => {
   });
 });
 
+
+app.get('/user', auth, (req, res) => {
+  
+})
 app.post("/signup", async (req, res) => {
   const { email, password } = req.body;
 
